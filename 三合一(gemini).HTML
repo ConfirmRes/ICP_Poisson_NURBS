@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>航发叶片逆向工程全流程系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background: #0a0f1c; color: #e2e8f0; overflow: hidden; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh;}
+        
+        /* ---------------- 全局公用样式 ---------------- */
+        .glass-panel { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(148, 163, 184, 0.15); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+        .metric-card { background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid rgba(148, 163, 184, 0.1); transition: all 0.3s ease; }
+        .task-row { transition: all 0.2s; cursor: pointer; }
+        .task-row:hover { transform: translateX(4px); }
+        .status-badge { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+        .status-pending { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .status-completed { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+        
+        .loading-spinner { border: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; cursor: pointer; }
+        .tab-btn { padding: 0.5rem 1rem; border-bottom: 2px solid transparent; color: #64748b; transition: all 0.3s; }
+        .tab-btn:hover:not(.active) { color: #94a3b8; background: rgba(148, 163, 184, 0.1); }
+
+        /* ---------------- 模块专属主题色隔离 ---------------- */
+        /* ICP (Blue/Cyan) */
+        .module-icp .btn-primary { background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 50%, #38bdf8 100%); background-size: 200% 200%; transition: all 0.3s;}
+        .module-icp .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 40px -10px rgba(14, 165, 233, 0.5); }
+        .module-icp .task-row:hover { background: rgba(56, 189, 248, 0.1); }
+        .module-icp .task-row.selected { background: rgba(56, 189, 248, 0.2); border-left: 3px solid #38bdf8; }
+        .module-icp .tab-btn.active { color: #38bdf8; border-bottom-color: #38bdf8; background: rgba(56, 189, 248, 0.1); }
+        .module-icp .slider-thumb { background: #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+        .module-icp .loading-spinner { border-color: rgba(56, 189, 248, 0.1); border-top-color: #38bdf8; }
+
+        /* Poisson (Emerald/Cyan) */
+        .module-ps .btn-primary { background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%); background-size: 200% 200%; transition: all 0.3s;}
+        .module-ps .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 40px -10px rgba(16, 185, 129, 0.5); }
+        .module-ps .task-row:hover { background: rgba(52, 211, 153, 0.1); }
+        .module-ps .task-row.selected { background: rgba(52, 211, 153, 0.2); border-left: 3px solid #34d399; }
+        .module-ps .tab-btn.active { color: #34d399; border-bottom-color: #34d399; background: rgba(52, 211, 153, 0.1); }
+        .module-ps .slider-thumb { background: #34d399; box-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
+        .module-ps .loading-spinner { border-color: rgba(52, 211, 153, 0.1); border-top-color: #34d399; }
+
+        /* NURBS (Violet/Purple) */
+        .module-nb .btn-primary { background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%); background-size: 200% 200%; transition: all 0.3s;}
+        .module-nb .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 40px -10px rgba(139, 92, 246, 0.5); }
+        .module-nb .task-row:hover { background: rgba(139, 92, 246, 0.1); }
+        .module-nb .task-row.selected { background: rgba(139, 92, 246, 0.2); border-left: 3px solid #8b5cf6; }
+        .module-nb .tab-btn.active { color: #a78bfa; border-bottom-color: #8b5cf6; background: rgba(139, 92, 246, 0.1); }
+        .module-nb .slider-thumb { background: #8b5cf6; box-shadow: 0 0 10px rgba(139, 92, 246, 0.5); }
+        .module-nb .loading-spinner { border-color: rgba(139, 92, 246, 0.1); border-top-color: #8b5cf6; }
+
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; animation: none; }
+        .app-module { display: none; height: calc(100vh - 48px); width: 100%; flex-direction: column; }
+        .app-module.active { display: flex; }
+
+        /* 全局导航栏 */
+        .global-nav { height: 48px; background: #0f172a; border-b: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 50; }
+        .nav-link { padding: 0 15px; height: 100%; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: #94a3b8; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.2s;}
+        .nav-link:hover { color: #e2e8f0; background: rgba(255,255,255,0.05); }
+        .nav-link.active-icp { color: #38bdf8; border-bottom-color: #38bdf8; background: rgba(56, 189, 248, 0.1); }
+        .nav-link.active-ps { color: #34d399; border-bottom-color: #34d399; background: rgba(52, 211, 153, 0.1); }
+        .nav-link.active-nb { color: #a78bfa; border-bottom-color: #8b5cf6; background: rgba(139, 92, 246, 0.1); }
+        .nav-link.active-data { color: #14b8a6; border-bottom-color: #14b8a6; background: rgba(20, 184, 166, 0.1); }
+
+        /* 指标管理模块（浅色卡片 + 表格式布局） */
+        .module-data { background: #0f172a; }
+        .data-hero { background: linear-gradient(180deg, #0c1929 0%, #0f2744 100%); border-bottom: 1px solid rgba(51, 65, 85, 0.6); }
+        .data-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.25); overflow: hidden; }
+        .data-card-hd { background: #34495e; color: #ecf0f1; padding: 10px 16px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .data-card-bd { padding: 16px 20px; }
+        .data-input, .data-select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; font-size: 13px; color: #1e293b; background: #fff; min-width: 0; }
+        .data-input:focus, .data-select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
+        .data-table-wrap { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; color: #334155; }
+        .data-table th { background: #f1f5f9; color: #475569; font-weight: 600; text-align: left; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+        .data-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .data-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .data-table tbody tr:hover { background: #eff6ff; }
+        .eval-tag { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .eval-qualified { background: #d1fae5; color: #047857; }
+        .eval-pending { background: #dbeafe; color: #1d4ed8; }
+        .eval-fail { background: #fee2e2; color: #b91c1c; }
+        .eval-optimize { background: #fef3c7; color: #b45309; }
+        .data-icon-btn { width: 32px; height: 32px; border: none; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: opacity 0.2s; }
+        .data-icon-btn:hover { opacity: 0.9; }
+        .data-icon-view { background: #0d9488; color: #fff; margin-right: 8px; }
+        .data-icon-del { background: #dc2626; color: #fff; }
+        .btn-data-query { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-data-query:hover { background: #1d4ed8; }
+        .btn-data-reset { background: #64748b; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-data-reset:hover { background: #475569; }
+        .btn-data-export { background: #16a34a; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-data-export:hover { background: #15803d; }
+    </style>
+</head>
+<body>
+
+    <nav class="global-nav">
+        <div class="flex items-center gap-3 h-full">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/></svg>
+            <span class="font-bold text-white tracking-wider mr-6">航发叶片数字检测平台</span>
+            <div id="nav-icp" class="nav-link active-icp" onclick="switchAppModule('icp')">1. ICP 点云配准</div>
+            <div id="nav-ps" class="nav-link" onclick="switchAppModule('ps')">2. 泊松水密重构</div>
+            <div id="nav-nb" class="nav-link" onclick="switchAppModule('nb')">3. NURBS 形位公差计算</div>
+            <div id="nav-data" class="nav-link" onclick="switchAppModule('data')">4. 指标管理</div>
+        </div>
+        <div class="text-xs text-slate-400 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> 系统在线</div>
+    </nav>
+
+    <div id="app-icp" class="app-module module-icp active">
+        <header class="glass-panel h-16 flex items-center justify-between px-6 z-20 relative border-b border-slate-700/50">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                </div>
+                <div><h1 class="text-lg font-bold text-white tracking-tight">ICP点云配准系统</h1><p class="text-xs text-slate-400">支持本地 CAD(.ply) 与 Scan(.pcd) 文件上传配准</p></div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-full border border-slate-700 text-sm"><div class="w-2 h-2 bg-blue-500 rounded-full"></div><span class="text-slate-300" id="icp-system-status">系统就绪</span></div>
+                <button onclick="icpExportReport()" id="icp-export-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm transition-all flex items-center gap-2 disabled:opacity-50" disabled>导出配准报告</button>
+            </div>
+        </header>
+
+        <div class="flex-1 flex overflow-hidden">
+            <aside class="w-[450px] glass-panel border-r border-slate-700/50 flex flex-col z-10">
+                <div class="flex border-b border-slate-700/50">
+                    <button class="tab-btn active flex-1 text-sm font-medium" onclick="switchTab('icp', 'tasks')" id="icp-tab-tasks">采集与上传</button>
+                    <button class="tab-btn flex-1 text-sm font-medium" onclick="switchTab('icp', 'params')" id="icp-tab-params">配准参数</button>
+                    <button class="tab-btn flex-1 text-sm font-medium" onclick="switchTab('icp', 'results')" id="icp-tab-results">几何详情</button>
+                </div>
+
+                <div id="icp-panel-tasks" class="flex-1 overflow-y-auto p-4 space-y-3 block">
+                    <div class="p-4 bg-gradient-to-br from-slate-800 to-slate-800/50 rounded-lg border border-teal-500/30 shadow-inner">
+                        <h4 class="text-sm font-semibold text-teal-400 mb-3 flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>手动录入（联动指标管理）</h4>
+                        <p class="text-xs text-slate-500 mb-3">先保存记录，再选择该记录并上传 PLY/PCD 执行全流程计算。</p>
+                        <div class="grid grid-cols-1 gap-2">
+                            <input type="text" id="manual-id" class="w-full text-xs bg-slate-900/80 border border-slate-600 rounded px-2 py-2 text-slate-200" placeholder="记录 ID（唯一，如 REC-2026-001）" autocomplete="off">
+                            <select id="manual-blade-type" class="w-full text-xs bg-slate-900/80 border border-slate-600 rounded px-2 py-2 text-slate-200">
+                                <option value="压气机叶片">压气机叶片</option>
+                                <option value="涡轮叶片">涡轮叶片</option>
+                                <option value="导流叶片">导流叶片</option>
+                            </select>
+                            <input type="text" id="manual-blade-no" class="w-full text-xs bg-slate-900/80 border border-slate-600 rounded px-2 py-2 text-slate-200" placeholder="叶片编号" autocomplete="off">
+                            <input type="date" id="manual-inspect-date" class="w-full text-xs bg-slate-900/80 border border-slate-600 rounded px-2 py-2 text-slate-200" title="检测日期">
+                            <input type="text" id="manual-inspector" class="w-full text-xs bg-slate-900/80 border border-slate-600 rounded px-2 py-2 text-slate-200" placeholder="送检人员" autocomplete="off">
+                            <input type="text" id="manual-batch" class="w-full text-xs bg-slate-900/80 border border-slate-600 rounded px-2 py-2 text-slate-200" placeholder="检测批次（如 BATCH-01）" autocomplete="off">
+                            <button type="button" onclick="submitManualRecord()" class="w-full mt-1 bg-teal-600 hover:bg-teal-500 text-white text-sm py-2 rounded-lg font-medium transition-colors">保存记录到数据库</button>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gradient-to-br from-slate-800 to-slate-800/50 rounded-lg border border-cyan-500/30 shadow-inner">
+                        <h4 class="text-sm font-semibold text-cyan-400 mb-3 flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>本地文件配准上传</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">目标 CAD 模型 (.ply)</label>
+                                <input type="file" id="icp-upload-cad" accept=".ply" class="w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-500/20 file:text-blue-400 hover:file:bg-blue-500/30 cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="text-xs text-slate-400 block mb-1">源点云数据 (.pcd)</label>
+                                <input type="file" id="icp-upload-scan" accept=".pcd" class="w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30 cursor-pointer">
+                            </div>
+                            <button onclick="icpLoadCustomFiles()" class="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-white text-sm py-2 rounded-lg font-medium transition-colors border border-slate-600">解析并加载3D模型</button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between mt-4 mb-2"><h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">检测任务（数据库）</h3></div>
+                    <div id="icp-task-list" class="space-y-2"></div>
+                </div>
+
+                <div id="icp-panel-params" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+                    <h3 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider">ICP 配准控制</h3>
+                    <div class="space-y-4">
+                        <div><div class="flex justify-between text-sm mb-2"><span class="text-slate-300">最大迭代次数</span><span id="icp-iter-val" class="text-cyan-400 font-mono">50</span></div><input type="range" min="10" max="500" value="50" class="w-full h-2 bg-slate-700 rounded-lg appearance-none slider-thumb" oninput="document.getElementById('icp-iter-val').innerText=this.value"></div>
+                        <div><div class="flex justify-between text-sm mb-2"><span class="text-slate-300">收敛阈值 (mm)</span><span id="icp-threshold-val" class="text-cyan-400 font-mono">0.001</span></div><input type="range" min="1" max="10" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none slider-thumb"></div>
+                        <div class="flex items-center gap-2 mt-4 p-3 bg-slate-800/30 rounded-lg"><input type="checkbox" checked class="rounded bg-slate-700"><label class="text-sm text-slate-300">Point-to-Plane 模式优化</label></div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-700">
+                        <button onclick="icpRunRegistration()" id="icp-load-task-btn" class="w-full btn-primary py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 shadow-lg disabled:opacity-50" disabled>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> 执行配准算法
+                        </button>
+                    </div>
+                </div>
+
+                <div id="icp-panel-results" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+                    <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider">配准结果矩阵</h3><span class="text-xs text-slate-500" id="icp-result-blade-id">未选择</span></div>
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <div class="metric-card p-3 rounded-lg"><div class="text-xs text-slate-400 mb-1">RMSE</div><div class="text-xl font-mono font-bold text-white" id="icp-rmse-display">--</div></div>
+                        <div class="metric-card p-3 rounded-lg"><div class="text-xs text-slate-400 mb-1">迭代次数</div><div class="text-xl font-mono font-bold text-cyan-400" id="icp-iteration-display">--</div></div>
+                    </div>
+                    <div class="mt-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div class="text-xs text-slate-400 mb-2">刚体变换矩阵 (4×4)</div>
+                        <div class="font-mono text-xs text-slate-300 space-y-1" id="icp-matrix-display"><div class="text-slate-500">等待配准...</div></div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="flex-1 relative bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+                <div id="icp-canvas-container" class="absolute inset-0"></div>
+                <div class="absolute top-4 left-4 glass-panel px-4 py-3 rounded-xl text-sm z-10">
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-blue-500"></div><span class="text-slate-300">CAD模型 (目标)</span></div>
+                        <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-cyan-400"></div><span class="text-slate-300">扫描点云 (源)</span></div>
+                    </div>
+                </div>
+                <div id="icp-loading-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+                    <div class="text-center"><div class="loading-spinner w-16 h-16 mx-auto mb-4"></div><p class="text-cyan-400 text-lg font-semibold" id="icp-loading-text">加载中...</p></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="app-ps" class="app-module module-ps">
+        <header class="glass-panel h-16 flex items-center justify-between px-6 z-20 relative border-b border-slate-700/50">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-400 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                </div>
+                <div><h1 class="text-lg font-bold text-white tracking-tight">泊松曲面重构系统</h1><p class="text-xs text-slate-400">将配准后的点云重构为水密三角网格</p></div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="ps-export-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm transition-all disabled:opacity-50" disabled>导出STL网格</button>
+            </div>
+        </header>
+        
+        <div class="flex-1 flex overflow-hidden">
+            <aside class="w-[450px] glass-panel border-r border-slate-700/50 flex flex-col z-10">
+                <div class="flex border-b border-slate-700/50">
+                    <button class="tab-btn active flex-1 text-sm font-medium" onclick="switchTab('ps', 'tasks')" id="ps-tab-tasks">数据输入</button>
+                    <button class="tab-btn flex-1 text-sm font-medium" onclick="switchTab('ps', 'params')" id="ps-tab-params">重构参数</button>
+                    <button class="tab-btn flex-1 text-sm font-medium" onclick="switchTab('ps', 'results')" id="ps-tab-results">网格质量</button>
+                </div>
+                <div id="ps-panel-tasks" class="flex-1 overflow-y-auto p-4 space-y-3 block">
+                    <h3 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">配准完成的点云</h3>
+                    <div id="ps-task-list" class="space-y-2"></div>
+                </div>
+                <div id="ps-panel-params" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+                    <h3 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider">泊松重构参数</h3>
+                    <div class="space-y-4">
+                        <div><div class="flex justify-between text-sm mb-2"><span class="text-slate-300">八叉树深度</span><span id="ps-depth-val" class="text-emerald-400 font-mono">9</span></div><input type="range" min="4" max="12" value="9" class="w-full h-2 bg-slate-700 rounded-lg appearance-none slider-thumb" oninput="document.getElementById('ps-depth-val').innerText=this.value"></div>
+                        <div><div class="flex justify-between text-sm mb-2"><span class="text-slate-300">等值面阈值</span><span class="text-emerald-400 font-mono">0.5</span></div><input type="range" min="1" max="100" value="50" class="w-full h-2 bg-slate-700 rounded-lg appearance-none slider-thumb"></div>
+                    </div>
+                    <div class="pt-4"><button onclick="psRunReconstruction()" id="ps-reconstruct-btn" class="w-full btn-primary py-3 rounded-xl font-semibold text-white shadow-lg disabled:opacity-50" disabled>执行泊松重构</button></div>
+                </div>
+                <div id="ps-panel-results" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="metric-card p-3 rounded-lg"><div class="text-xs text-slate-400">顶点数</div><div class="text-xl font-mono text-white" id="ps-vertex-count">--</div></div>
+                        <div class="metric-card p-3 rounded-lg"><div class="text-xs text-slate-400">三角面片</div><div class="text-xl font-mono text-emerald-400" id="ps-face-count">--</div></div>
+                        <div class="metric-card p-3 rounded-lg col-span-2 flex justify-between items-center">
+                            <span class="text-sm text-slate-400">水密性检测</span><span class="text-lg font-bold text-emerald-400" id="ps-watertight-check">等待检测</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+            <main class="flex-1 relative bg-gradient-to-br from-slate-950 to-slate-900">
+                <div id="ps-canvas-container" class="absolute inset-0"></div>
+                <div class="absolute top-4 left-4 glass-panel px-4 py-3 rounded-xl text-sm z-10 flex gap-4">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500"></div><span class="text-slate-300">输入点云</span></div>
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-cyan-400"></div><span class="text-slate-300">三角网格</span></div>
+                </div>
+                <div id="ps-loading-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+                    <div class="text-center"><div class="loading-spinner w-16 h-16 mx-auto mb-4"></div><p class="text-emerald-400 text-lg font-semibold" id="ps-loading-text">重构中...</p></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="app-nb" class="app-module module-nb">
+        <header class="glass-panel h-16 flex items-center justify-between px-6 z-20 relative border-b border-slate-700/50">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-400 rounded-xl flex items-center justify-center shadow-lg shadow-violet-500/30">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                </div>
+                <div><h1 class="text-lg font-bold text-white tracking-tight">NURBS形位公差系统</h1><p class="text-xs text-slate-400">将网格参数化并提取21项航空标准形位公差</p></div>
+            </div>
+            <button id="nb-export-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm transition-all disabled:opacity-50" disabled>导出STEP与质检报告</button>
+        </header>
+
+        <div class="flex-1 flex overflow-hidden">
+            <aside class="w-[450px] glass-panel border-r border-slate-700/50 flex flex-col z-10">
+                <div class="flex border-b border-slate-700/50">
+                    <button class="tab-btn active flex-1 text-sm font-medium" onclick="switchTab('nb', 'tasks')" id="nb-tab-tasks">水密网格</button>
+                    <button class="tab-btn flex-1 text-sm font-medium" onclick="switchTab('nb', 'params')" id="nb-tab-params">NURBS拟合</button>
+                    <button class="tab-btn flex-1 text-sm font-medium" onclick="switchTab('nb', 'results')" id="nb-tab-results">检验报告</button>
+                </div>
+                <div id="nb-panel-tasks" class="flex-1 overflow-y-auto p-4 space-y-3 block">
+                    <h3 class="text-sm font-semibold text-violet-400 uppercase tracking-wider">重构完成网格</h3>
+                    <div id="nb-task-list" class="space-y-2"></div>
+                </div>
+                <div id="nb-panel-params" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+                    <h3 class="text-sm font-semibold text-violet-400 uppercase tracking-wider">曲面拟合参数</h3>
+                    <div class="space-y-4">
+                        <div><div class="flex justify-between text-sm mb-2"><span class="text-slate-300">U向控制点</span><span id="nb-u-val" class="text-violet-400 font-mono">8</span></div><input type="range" min="4" max="15" value="8" class="w-full h-2 bg-slate-700 rounded-lg appearance-none slider-thumb" oninput="document.getElementById('nb-u-val').innerText=this.value"></div>
+                        <div><div class="flex justify-between text-sm mb-2"><span class="text-slate-300">V向控制点</span><span id="nb-v-val" class="text-violet-400 font-mono">9</span></div><input type="range" min="4" max="15" value="9" class="w-full h-2 bg-slate-700 rounded-lg appearance-none slider-thumb" oninput="document.getElementById('nb-v-val').innerText=this.value"></div>
+                    </div>
+                    <div class="pt-4"><button onclick="nbRunFitting()" id="nb-fit-btn" class="w-full btn-primary py-3 rounded-xl font-semibold text-white shadow-lg disabled:opacity-50" disabled>计算参数化公差</button></div>
+                </div>
+                <div id="nb-panel-results" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+                    <h3 class="text-sm font-semibold text-violet-400 uppercase tracking-wider">核心形位公差提取</h3>
+                    <div class="space-y-2" id="nb-params-list">
+                        </div>
+                </div>
+            </aside>
+            <main class="flex-1 relative bg-gradient-to-br from-slate-950 to-slate-900">
+                <div id="nb-canvas-container" class="absolute inset-0"></div>
+                <div class="absolute top-4 left-4 glass-panel px-4 py-3 rounded-xl text-sm z-10 flex gap-4">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-cyan-400"></div><span class="text-slate-300">输入网格</span></div>
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-violet-400"></div><span class="text-slate-300">NURBS 参数化曲面</span></div>
+                </div>
+                <div id="nb-loading-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+                    <div class="text-center"><div class="loading-spinner w-16 h-16 mx-auto mb-4"></div><p class="text-violet-400 text-lg font-semibold" id="nb-loading-text">拟合解算中...</p></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="app-data" class="app-module module-data">
+        <div class="data-hero shrink-0 py-8 px-6 text-center">
+            <div class="inline-flex flex-col items-center gap-2">
+                <div class="flex items-center gap-3 text-white">
+                    <svg class="w-8 h-8 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <h1 class="text-2xl md:text-3xl font-bold tracking-tight">指标管理</h1>
+                </div>
+                <p class="text-sm md:text-base text-slate-400">叶片测量指标记录与管理</p>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 md:p-6 pb-10">
+            <div class="max-w-[1400px] mx-auto space-y-5">
+                <div class="data-card">
+                    <div class="data-card-hd">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                        筛选条件
+                    </div>
+                    <div class="data-card-bd">
+                        <div class="flex flex-col xl:flex-row xl:flex-wrap xl:items-end gap-4">
+                            <div class="flex flex-col sm:flex-row flex-1 flex-wrap gap-4 min-w-0">
+                                <label class="flex flex-col gap-1.5 text-xs font-medium text-slate-600 min-w-[140px]">
+                                    叶片类型
+                                    <select id="dm-filter-type" class="data-select w-full">
+                                        <option value="">全部</option>
+                                        <option value="压气机叶片">压气机叶片</option>
+                                        <option value="涡轮叶片">涡轮叶片</option>
+                                        <option value="导流叶片">导流叶片</option>
+                                    </select>
+                                </label>
+                                <label class="flex flex-col gap-1.5 text-xs font-medium text-slate-600 min-w-[140px]">
+                                    检测状态
+                                    <select id="dm-filter-status" class="data-select w-full">
+                                        <option value="">全部</option>
+                                        <option value="合格">合格</option>
+                                        <option value="待评估">待评估</option>
+                                        <option value="不合格">不合格</option>
+                                        <option value="需优化">需优化</option>
+                                    </select>
+                                </label>
+                                <label class="flex flex-col gap-1.5 text-xs font-medium text-slate-600 min-w-[160px]">
+                                    检测日期
+                                    <input type="date" id="dm-filter-date" class="data-input w-full" title="检测日期">
+                                </label>
+                                <label class="flex flex-col gap-1.5 text-xs font-medium text-slate-600 min-w-[160px] flex-1">
+                                    送检人员
+                                    <input type="text" id="dm-filter-inspector" class="data-input w-full" placeholder="输入姓名" autocomplete="off">
+                                </label>
+                            </div>
+                            <div class="flex flex-wrap gap-2 shrink-0">
+                                <button type="button" class="btn-data-query" onclick="dmApplyFilter()">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    查询
+                                </button>
+                                <button type="button" class="btn-data-reset" onclick="dmResetFilter()">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    重置
+                                </button>
+                                <button type="button" class="btn-data-export" onclick="dmExportCsv()">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                    导出
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="data-card">
+                    <div class="data-card-hd">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                        指标记录列表
+                    </div>
+                    <div class="data-card-bd p-0">
+                        <div class="data-table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>记录ID</th>
+                                        <th>叶片类型</th>
+                                        <th>叶片编号</th>
+                                        <th>叶片长度</th>
+                                        <th>弦长</th>
+                                        <th>扭转角度</th>
+                                        <th>最大厚度</th>
+                                        <th>评估结果</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dm-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="dm-empty-hint" class="hidden py-12 text-center text-slate-500 text-sm">暂无符合条件的记录</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { PCDLoader } from 'three/addons/loaders/PCDLoader.js';
+        import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+
+        // ==========================================
+        // 全局系统状态与流转逻辑
+        // ==========================================
+        let currentAppModule = 'icp'; 
+
+        // 指标管理：数据来自后端 /api/indicators（与 FastAPI + MySQL 联调）
+        let dmFiltered = [];
+
+        function dmEvalClass(evalText) {
+            const map = { '合格': 'eval-qualified', '待评估': 'eval-pending', '不合格': 'eval-fail', '需优化': 'eval-optimize' };
+            return map[evalText] || 'eval-pending';
+        }
+
+        function fmtMm(v) { return v == null || v === '' ? '--' : `${Number(v).toFixed(2)} mm`; }
+        function fmtDeg(v) { return v == null || v === '' ? '--' : `${Number(v).toFixed(1)}°`; }
+
+        function dmRenderTable() {
+            const tbody = document.getElementById('dm-table-body');
+            const empty = document.getElementById('dm-empty-hint');
+            const wrap = tbody.closest('.data-table-wrap');
+            if (!dmFiltered.length) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                if (wrap) wrap.classList.add('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            if (wrap) wrap.classList.remove('hidden');
+            tbody.innerHTML = dmFiltered.map((r) => `
+                <tr data-id="${r.id}">
+                    <td class="font-mono font-medium">${r.id}</td>
+                    <td>${r.bladeType}</td>
+                    <td class="font-mono text-sm">${r.bladeNo}</td>
+                    <td>${fmtMm(r.lengthMm)}</td>
+                    <td>${fmtMm(r.chordMm)}</td>
+                    <td>${fmtDeg(r.twistDeg)}</td>
+                    <td>${fmtMm(r.thickMm)}</td>
+                    <td><span class="eval-tag ${dmEvalClass(r.eval)}">${r.eval}</span></td>
+                    <td>
+                        <button type="button" class="data-icon-btn data-icon-view" title="查看" onclick="dmViewRecord('${r.id}')">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                        </button>
+                        <button type="button" class="data-icon-btn data-icon-del" title="删除" onclick="dmDeleteRecord('${r.id}')">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function dmSyncFromServer() {
+            const params = new URLSearchParams();
+            const type = document.getElementById('dm-filter-type').value;
+            const status = document.getElementById('dm-filter-status').value;
+            const date = document.getElementById('dm-filter-date').value;
+            const inspector = document.getElementById('dm-filter-inspector').value.trim();
+            if (type) params.set('blade_type', type);
+            if (status) params.set('eval', status);
+            if (date) params.set('inspect_date', date);
+            if (inspector) params.set('inspector', inspector);
+            const q = params.toString();
+            const url = q ? `/api/indicators?${q}` : '/api/indicators';
+            try {
+                const res = await fetch(url, { headers: { Accept: 'application/json' } });
+                if (!res.ok) {
+                    const t = await res.text();
+                    throw new Error(t || res.statusText);
+                }
+                dmFiltered = await res.json();
+                dmRenderTable();
+            } catch (e) {
+                console.error(e);
+                alert('无法加载指标数据：请通过后端地址打开本站（例如 http://127.0.0.1:8000/），确认 MySQL 已启动且已执行 backend/sql/init.sql，并检查 backend/.env 中的数据库账号。');
+            }
+        }
+
+        window.dmApplyFilter = () => void dmSyncFromServer();
+
+        window.dmResetFilter = () => {
+            document.getElementById('dm-filter-type').value = '';
+            document.getElementById('dm-filter-status').value = '';
+            document.getElementById('dm-filter-date').value = '';
+            document.getElementById('dm-filter-inspector').value = '';
+            void dmSyncFromServer();
+        };
+
+        window.dmExportCsv = () => {
+            const rows = [['记录ID', '叶片类型', '叶片编号', '叶片长度(mm)', '弦长(mm)', '扭转角度(°)', '最大厚度(mm)', '评估结果', '检测日期', '送检人员']];
+            dmFiltered.forEach((r) => rows.push([r.id, r.bladeType, r.bladeNo, r.lengthMm, r.chordMm, r.twistDeg, r.thickMm, r.eval, r.inspectDate, r.inspector]));
+            const csv = rows.map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `叶片指标记录_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        };
+
+        window.dmViewRecord = async (id) => {
+            try {
+                const res = await fetch(`/api/indicators/${encodeURIComponent(id)}`, {
+                    headers: { Accept: 'application/json' },
+                });
+                if (!res.ok) throw new Error('未找到记录');
+                const r = await res.json();
+                alert(`记录 ${r.id}\n类型：${r.bladeType}  编号：${r.bladeNo}\n批次：${r.batchNo}\n长度 ${fmtMm(r.lengthMm)}  弦长 ${fmtMm(r.chordMm)}  扭转 ${fmtDeg(r.twistDeg)}  最大厚度 ${fmtMm(r.thickMm)}\n评估：${r.eval}\n日期：${r.inspectDate}  送检：${r.inspector}`);
+            } catch (e) {
+                alert('获取记录失败：' + (e && e.message ? e.message : String(e)));
+            }
+        };
+
+        window.dmDeleteRecord = async (id) => {
+            if (!confirm('确定删除该条指标记录？')) return;
+            try {
+                const res = await fetch(`/api/indicators/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (!res.ok && res.status !== 204) {
+                    const t = await res.text();
+                    throw new Error(t || res.statusText);
+                }
+                await dmSyncFromServer();
+            } catch (e) {
+                alert('删除失败：' + (e && e.message ? e.message : String(e)));
+            }
+        };
+        
+        let serverTasks = [];
+
+        let selectedTask = { icp: null, ps: null, nb: null };
+
+        async function refreshJobs() {
+            try {
+                const res = await fetch('/api/jobs', { headers: { Accept: 'application/json' } });
+                if (!res.ok) throw new Error(await res.text());
+                serverTasks = await res.json();
+                updateTaskLists();
+            } catch (e) {
+                console.error(e);
+                serverTasks = [];
+                updateTaskLists();
+            }
+        }
+
+        window.submitManualRecord = async () => {
+            const id = document.getElementById('manual-id').value.trim();
+            const bladeType = document.getElementById('manual-blade-type').value;
+            const bladeNo = document.getElementById('manual-blade-no').value.trim();
+            const inspectDate = document.getElementById('manual-inspect-date').value;
+            const inspector = document.getElementById('manual-inspector').value.trim();
+            const batchNo = document.getElementById('manual-batch').value.trim();
+            if (!id || !bladeNo || !inspectDate || !inspector || !batchNo) {
+                alert('请填写完整：记录ID、叶片编号、检测日期、送检人员、检测批次');
+                return;
+            }
+            try {
+                const res = await fetch('/api/indicators', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({
+                        id,
+                        bladeType,
+                        bladeNo,
+                        inspectDate,
+                        inspector,
+                        batchNo,
+                    }),
+                });
+                if (!res.ok) {
+                    const t = await res.text();
+                    throw new Error(t || res.statusText);
+                }
+                alert('记录已保存，请在下方列表中选择该记录后再上传文件并执行配准。');
+                await refreshJobs();
+                await dmSyncFromServer();
+                selectedTask.icp = id;
+                selectedTask.ps = id;
+                selectedTask.nb = id;
+                updateTaskLists();
+            } catch (e) {
+                alert('保存失败：' + (e && e.message ? e.message : String(e)));
+            }
+        };
+
+        // ==========================================
+        // UI 切换逻辑
+        // ==========================================
+        window.switchAppModule = (moduleName) => {
+            currentAppModule = moduleName;
+            // 切换顶部导航高亮
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active-icp', 'active-ps', 'active-nb', 'active-data'));
+            document.getElementById(`nav-${moduleName}`).classList.add(`active-${moduleName}`);
+            // 切换主面板
+            document.querySelectorAll('.app-module').forEach(el => el.classList.remove('active'));
+            document.getElementById(`app-${moduleName}`).classList.add('active');
+            
+            // 触发对应模块渲染与 Canvas 刷新
+            updateTaskLists();
+            resizeCanvases();
+            if (moduleName === 'data') void dmSyncFromServer();
+            if (moduleName === 'ps' && selectedTask.ps) void loadPsScene(selectedTask.ps);
+            if (moduleName === 'nb' && selectedTask.nb) void loadNbScene(selectedTask.nb);
+        };
+
+        window.switchTab = (moduleName, tab) => {
+            document.querySelectorAll(`#app-${moduleName} .tab-btn`).forEach(b => b.classList.remove('active'));
+            document.getElementById(`${moduleName}-tab-${tab}`).classList.add('active');
+            ['tasks', 'params', 'results'].forEach(t => document.getElementById(`${moduleName}-panel-${t}`).classList.add('hidden'));
+            document.getElementById(`${moduleName}-panel-${tab}`).classList.remove('hidden');
+        };
+
+        function updateTaskLists() {
+            const icpHtml = serverTasks.map(t => createTaskHTML('icp', t, t.icp)).join('');
+            document.getElementById('icp-task-list').innerHTML = icpHtml || '<p class="text-xs text-slate-500 px-2">暂无任务。请先「手动录入」保存一条记录。</p>';
+            document.getElementById('ps-task-list').innerHTML = serverTasks.filter(t => t.icp === 'completed').map(t => createTaskHTML('ps', t, t.ps)).join('') || '<p class="text-xs text-slate-500 px-2">暂无已配准任务</p>';
+            document.getElementById('nb-task-list').innerHTML = serverTasks.filter(t => t.ps === 'completed').map(t => createTaskHTML('nb', t, t.nb)).join('') || '<p class="text-xs text-slate-500 px-2">暂无已重构网格</p>';
+        }
+
+        function createTaskHTML(mod, task, status) {
+            const isSel = selectedTask[mod] === task.id ? 'selected' : '';
+            const statusNames = { pending: '待处理', processing: '进行中', completed: '已完成' };
+            const badgeClass = status === 'completed' ? 'status-completed' : 'status-pending';
+            return `
+                <div class="task-row p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 ${isSel}" onclick="handleTaskSelect('${mod}', '${task.id}')" id="${mod}-task-${task.id}">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="font-semibold text-white text-sm">${task.name}</span>
+                        <span class="status-badge ${badgeClass}">${statusNames[status] || status}</span>
+                    </div>
+                    <div class="text-xs text-slate-500">${task.type} ${task.isCustom ? '<span class="text-cyan-400 ml-2">[本地文件]</span>' : ''}</div>
+                </div>
+            `;
+        }
+
+        window.handleTaskSelect = (mod, id) => {
+            selectedTask[mod] = id;
+            if (mod === 'icp') {
+                selectedTask.ps = id;
+                selectedTask.nb = id;
+            }
+            updateTaskLists();
+            if (mod === 'icp') document.getElementById('icp-load-task-btn').disabled = false;
+            if (mod === 'ps') document.getElementById('ps-reconstruct-btn').disabled = false;
+            if (mod === 'nb') document.getElementById('nb-fit-btn').disabled = false;
+            if (mod === 'icp') loadMock3D('icp');
+            if (mod === 'ps') void loadPsScene(id);
+            if (mod === 'nb') void loadNbScene(id);
+        };
+
+        // ==========================================
+        // Three.js 核心逻辑
+        // ==========================================
+        const scenes = { icp: new THREE.Scene(), ps: new THREE.Scene(), nb: new THREE.Scene() };
+        const cameras = {}, renderers = {}, controls = {};
+        const meshes = { icp: { cad: null, scan: null }, ps: { pc: null, mesh: null }, nb: { root: null } };
+
+        function initThreeJS(mod) {
+            const container = document.getElementById(`${mod}-canvas-container`);
+            scenes[mod].background = new THREE.Color(0x0a0f1c);
+            
+            cameras[mod] = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 200000);
+            cameras[mod].position.set(60, 50, 80);
+            
+            renderers[mod] = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderers[mod].setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderers[mod].domElement);
+            
+            controls[mod] = new OrbitControls(cameras[mod], renderers[mod].domElement);
+            controls[mod].enableDamping = true;
+            controls[mod].target.set(0, 0, 0);
+
+            scenes[mod].add(new THREE.AmbientLight(0x404080, 0.6));
+            const dl = new THREE.DirectionalLight(0xffffff, 1); dl.position.set(50, 100, 50); scenes[mod].add(dl);
+            scenes[mod].add(new THREE.GridHelper(100, 20, 0x1e293b, 0x0f172a));
+        }
+
+        function resizeCanvases() {
+            ['icp', 'ps', 'nb'].forEach(mod => {
+                const container = document.getElementById(`${mod}-canvas-container`);
+                if(container && cameras[mod] && renderers[mod] && container.clientWidth > 0) {
+                    cameras[mod].aspect = container.clientWidth / container.clientHeight;
+                    cameras[mod].updateProjectionMatrix();
+                    renderers[mod].setSize(container.clientWidth, container.clientHeight);
+                }
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // 优化：仅渲染当前显示的模块
+            const mod = currentAppModule;
+            if(controls[mod] && renderers[mod]) {
+                controls[mod].update();
+                renderers[mod].render(scenes[mod], cameras[mod]);
+            }
+        }
+
+        function clearSceneObjects(mod) {
+            const sc = scenes[mod];
+            Object.values(meshes[mod]).forEach((m) => {
+                if (m) sc.remove(m);
+            });
+            if (mod === 'icp') {
+                meshes.icp.cad = null;
+                meshes.icp.scan = null;
+            }
+            if (mod === 'ps') {
+                meshes.ps.pc = null;
+                meshes.ps.mesh = null;
+            }
+            if (mod === 'nb') {
+                meshes.nb.root = null;
+            }
+        }
+
+        function loadMock3D(mod) {
+            if (mod !== 'icp') return;
+            const sc = scenes.icp;
+            clearSceneObjects('icp');
+            const geo = new THREE.BoxGeometry(20, 60, 10);
+            meshes.icp.cad = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.5 }));
+            const ptsGeo = new THREE.BufferGeometry();
+            const pts = [];
+            for (let i = 0; i < 1000; i++) pts.push((Math.random() - 0.5) * 18, (Math.random() - 0.5) * 58, (Math.random() - 0.5) * 8);
+            ptsGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            meshes.icp.scan = new THREE.Points(ptsGeo, new THREE.PointsMaterial({ color: 0x06b6d4, size: 0.5 }));
+            meshes.icp.scan.position.set(15, 10, -5);
+            meshes.icp.scan.rotation.set(0.2, 0.4, 0);
+            sc.add(meshes.icp.cad);
+            sc.add(meshes.icp.scan);
+        }
+
+        function fitCameraToScene(mod) {
+            const box = new THREE.Box3();
+            if (mod === 'ps') {
+                if (meshes.ps.pc) box.expandByObject(meshes.ps.pc);
+                if (meshes.ps.mesh) box.expandByObject(meshes.ps.mesh);
+            } else if (mod === 'nb') {
+                if (meshes.nb.root) box.expandByObject(meshes.nb.root);
+            } else if (mod === 'icp') {
+                if (meshes.icp.cad) box.expandByObject(meshes.icp.cad);
+                if (meshes.icp.scan) box.expandByObject(meshes.icp.scan);
+            }
+            if (box.isEmpty()) return;
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+            const dist = maxDim * 2.2;
+            cameras[mod].position.set(center.x + dist * 0.75, center.y + dist * 0.55, center.z + dist * 0.85);
+            controls[mod].target.copy(center);
+            controls[mod].update();
+        }
+
+        async function loadPsScene(jobId) {
+            if (!jobId || !scenes.ps) return;
+            clearSceneObjects('ps');
+            const sc = scenes.ps;
+            const pcdLoader = new PCDLoader();
+            const stlLoader = new STLLoader();
+            let loaded = false;
+
+            try {
+                const rp = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/artifact/registered.pcd`);
+                if (rp.ok) {
+                    const buf = await rp.arrayBuffer();
+                    const pts = pcdLoader.parse(buf);
+                    if (pts && pts.isPoints) {
+                        const cnt = pts.geometry.attributes.position ? pts.geometry.attributes.position.count : 0;
+                        const psize = cnt > 200000 ? 0.08 : cnt > 50000 ? 0.12 : 0.2;
+                        if (pts.material) pts.material.dispose();
+                        pts.material = new THREE.PointsMaterial({ color: 0x22c55e, size: psize, sizeAttenuation: true });
+                        meshes.ps.pc = pts;
+                        sc.add(pts);
+                        loaded = true;
+                    }
+                }
+            } catch (e) {
+                console.warn('加载配准点云失败', e);
+            }
+
+            try {
+                const rs = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/artifact/mesh.stl`);
+                if (rs.ok) {
+                    const buf = await rs.arrayBuffer();
+                    const geo = stlLoader.parse(buf);
+                    geo.computeVertexNormals();
+                    meshes.ps.mesh = new THREE.Mesh(
+                        geo,
+                        new THREE.MeshPhongMaterial({
+                            color: 0x34d399,
+                            transparent: true,
+                            opacity: 0.88,
+                            side: THREE.DoubleSide,
+                            shininess: 40,
+                        }),
+                    );
+                    sc.add(meshes.ps.mesh);
+                    loaded = true;
+                }
+            } catch (e) {
+                console.warn('加载水密网格失败', e);
+            }
+
+            if (!loaded) {
+                const box = new THREE.Mesh(
+                    new THREE.BoxGeometry(20, 60, 10, 6, 12, 4),
+                    new THREE.MeshPhongMaterial({ color: 0x10b981, transparent: true, opacity: 0.6 }),
+                );
+                meshes.ps.mesh = box;
+                sc.add(box);
+            }
+            fitCameraToScene('ps');
+        }
+
+        async function loadNbScene(jobId) {
+            if (!jobId || !scenes.nb) return;
+            clearSceneObjects('nb');
+            const sc = scenes.nb;
+            const stlLoader = new STLLoader();
+            let loaded = false;
+
+            try {
+                const rs = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/artifact/mesh.stl`);
+                if (rs.ok) {
+                    const buf = await rs.arrayBuffer();
+                    const geo = stlLoader.parse(buf);
+                    geo.computeVertexNormals();
+                    const solid = new THREE.Mesh(
+                        geo,
+                        new THREE.MeshPhongMaterial({
+                            color: 0x7c3aed,
+                            transparent: true,
+                            opacity: 0.92,
+                            side: THREE.DoubleSide,
+                            shininess: 50,
+                        }),
+                    );
+                    const edges = new THREE.LineSegments(
+                        new THREE.EdgesGeometry(geo, 18),
+                        new THREE.LineBasicMaterial({ color: 0xc4b5fd, transparent: true, opacity: 0.85 }),
+                    );
+                    const grp = new THREE.Group();
+                    grp.add(solid);
+                    grp.add(edges);
+                    meshes.nb.root = grp;
+                    sc.add(grp);
+                    loaded = true;
+                }
+            } catch (e) {
+                console.warn('加载 NURBS 分析网格失败', e);
+            }
+
+            if (!loaded) {
+                const g = new THREE.Mesh(
+                    new THREE.BoxGeometry(20, 60, 10, 10, 20, 5),
+                    new THREE.MeshPhongMaterial({ color: 0x8b5cf6, wireframe: true }),
+                );
+                meshes.nb.root = g;
+                sc.add(g);
+            }
+            fitCameraToScene('nb');
+        }
+
+        // ==========================================
+        // ICP 核心功能：本地真实文件解析与配准演示
+        // ==========================================
+        window.icpLoadCustomFiles = () => {
+            const cadFile = document.getElementById('icp-upload-cad').files[0];
+            const scanFile = document.getElementById('icp-upload-scan').files[0];
+
+            if(!cadFile && !scanFile) { alert('请至少上传一个文件用于配准演示'); return; }
+
+            switchTab('icp', 'params');
+            showLoading('icp', true, '正在解析 3D 数据文件...');
+
+            // 清理当前场景
+            if (meshes.icp.cad) { scenes.icp.remove(meshes.icp.cad); meshes.icp.cad = null; }
+            if (meshes.icp.scan) { scenes.icp.remove(meshes.icp.scan); meshes.icp.scan = null; }
+
+            const promises = [];
+
+            if(cadFile) {
+                promises.push(new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const loader = new PLYLoader();
+                        const geometry = loader.parse(e.target.result);
+                        geometry.center(); // 居中
+                        // 缩放以适应视窗 (工业数据往往很大)
+                        geometry.computeBoundingSphere();
+                        const scale = 30 / geometry.boundingSphere.radius;
+                        geometry.scale(scale, scale, scale);
+
+                        const material = new THREE.MeshPhongMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+                        meshes.icp.cad = new THREE.Mesh(geometry, material);
+                        scenes.icp.add(meshes.icp.cad);
+                        resolve();
+                    };
+                    reader.readAsArrayBuffer(cadFile);
+                }));
+            }
+
+            if(scanFile) {
+                promises.push(new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const loader = new PCDLoader();
+                        const geometry = loader.parse(e.target.result).geometry;
+                        
+                        if(geometry) {
+                            geometry.center();
+                            geometry.computeBoundingSphere();
+                            const scale = 30 / geometry.boundingSphere.radius;
+                            geometry.scale(scale, scale, scale);
+
+                            const material = new THREE.PointsMaterial({ color: 0x06b6d4, size: 0.2 });
+                            meshes.icp.scan = new THREE.Points(geometry, material);
+                            // 故意给扫描件一个初始偏置角度和位置，模拟现实中刚放上来的状态
+                            meshes.icp.scan.position.set(15, 10, -5);
+                            meshes.icp.scan.rotation.set(0.2, 0.4, 0);
+                            scenes.icp.add(meshes.icp.scan);
+                        }
+                        resolve();
+                    };
+                    reader.readAsArrayBuffer(scanFile);
+                }));
+            }
+
+            Promise.all(promises).then(() => {
+                showLoading('icp', false);
+                document.getElementById('icp-system-status').textContent = '本地文件已就绪（请选择左侧已录入记录后执行配准）';
+                document.getElementById('icp-load-task-btn').disabled = !selectedTask.icp;
+                updateTaskLists();
+            });
+        };
+
+        function formatMatrixHtml(rows) {
+            if (!rows || !rows.length) return '<div class="text-slate-500">无矩阵数据</div>';
+            return `<div class="text-emerald-400">${rows.map((r) => r.map((x) => Number(x).toFixed(4)).join(' &nbsp; ')).join('<br>')}</div>`;
+        }
+
+        window.icpRunRegistration = async () => {
+            const jobId = selectedTask.icp;
+            if (!jobId) {
+                alert('请先在左侧选择一条已保存的记录（需先手动录入）。');
+                return;
+            }
+            const cadFile = document.getElementById('icp-upload-cad').files[0];
+            const scanFile = document.getElementById('icp-upload-scan').files[0];
+            if (!cadFile || !scanFile) {
+                alert('请同时上传目标 CAD（.ply）与源点云（.pcd）。');
+                return;
+            }
+
+            const maxIter = document.getElementById('icp-iter-val').innerText;
+            const psDepth = document.getElementById('ps-depth-val').innerText;
+
+            switchTab('icp', 'results');
+            showLoading('icp', true, 'ICP 配准（服务器 Open3D）...');
+            document.getElementById('icp-system-status').textContent = '计算中...';
+
+            try {
+                const fd = new FormData();
+                fd.append('cad', cadFile);
+                fd.append('scan', scanFile);
+                fd.append('max_iterations', maxIter);
+                const resIcp = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/icp`, { method: 'POST', body: fd });
+                if (!resIcp.ok) throw new Error(await resIcp.text());
+                const icpData = await resIcp.json();
+                document.getElementById('icp-rmse-display').textContent = `${Number(icpData.rmse).toFixed(6)}（单位同点云）`;
+                document.getElementById('icp-iteration-display').textContent = String(icpData.iterations);
+                document.getElementById('icp-matrix-display').innerHTML = formatMatrixHtml(icpData.matrixRows);
+                document.getElementById('icp-export-btn').disabled = false;
+                document.getElementById('icp-result-blade-id').textContent = jobId;
+                showLoading('icp', false);
+
+                switchAppModule('ps');
+                showLoading('ps', true, '泊松曲面重构（自动衔接）...');
+                const resPs = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/poisson?depth=${encodeURIComponent(psDepth)}`, { method: 'POST' });
+                if (!resPs.ok) throw new Error(await resPs.text());
+                const psData = await resPs.json();
+                switchTab('ps', 'results');
+                document.getElementById('ps-vertex-count').textContent = String(psData.vertexCount);
+                document.getElementById('ps-face-count').textContent = String(psData.faceCount);
+                document.getElementById('ps-watertight-check').textContent = psData.watertight ? '✓ 通过' : '未水密';
+                document.getElementById('ps-export-btn').disabled = false;
+                showLoading('ps', false);
+                await loadPsScene(jobId);
+
+                switchAppModule('nb');
+                showLoading('nb', true, '网格指标 / NURBS 近似解算（自动衔接）...');
+                const resNb = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/nurbs`, { method: 'POST' });
+                if (!resNb.ok) throw new Error(await resNb.text());
+                const nbData = await resNb.json();
+                switchTab('nb', 'results');
+                document.getElementById('nb-params-list').innerHTML = `
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">叶片长度（网格分析）</span><span class="font-mono text-white">${Number(nbData.lengthMm).toFixed(3)} mm</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">弦长</span><span class="font-mono text-white">${Number(nbData.chordMm).toFixed(3)} mm</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">扭转角</span><span class="font-mono text-white">${Number(nbData.twistDeg).toFixed(2)}°</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">最大厚度</span><span class="font-mono text-white">${Number(nbData.thickMm).toFixed(3)} mm</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">评估</span><span class="font-mono text-emerald-400">${nbData.eval}</span></div>
+                `;
+                document.getElementById('nb-export-btn').disabled = false;
+                showLoading('nb', false);
+                await loadNbScene(jobId);
+
+                await refreshJobs();
+                switchAppModule('data');
+                await dmSyncFromServer();
+                document.getElementById('icp-system-status').textContent = '全流程已完成';
+            } catch (e) {
+                showLoading('icp', false);
+                showLoading('ps', false);
+                showLoading('nb', false);
+                document.getElementById('icp-system-status').textContent = '出错';
+                alert('流水线失败：' + (e && e.message ? e.message : String(e)));
+            }
+        };
+
+        // ==========================================
+        // 泊松与 NURBS 模拟执行
+        // ==========================================
+        window.psRunReconstruction = async () => {
+            const jobId = selectedTask.ps;
+            if (!jobId) { alert('请选择任务'); return; }
+            const psDepth = document.getElementById('ps-depth-val').innerText;
+            showLoading('ps', true, '泊松重构...');
+            try {
+                const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/poisson?depth=${encodeURIComponent(psDepth)}`, { method: 'POST' });
+                if (!res.ok) throw new Error(await res.text());
+                const psData = await res.json();
+                switchTab('ps', 'results');
+                document.getElementById('ps-vertex-count').textContent = String(psData.vertexCount);
+                document.getElementById('ps-face-count').textContent = String(psData.faceCount);
+                document.getElementById('ps-watertight-check').textContent = psData.watertight ? '✓ 通过' : '未水密';
+                document.getElementById('ps-export-btn').disabled = false;
+                await refreshJobs();
+                await loadPsScene(jobId);
+            } catch (e) {
+                alert('泊松重构失败：' + (e && e.message ? e.message : String(e)));
+            } finally {
+                showLoading('ps', false);
+            }
+        };
+
+        window.nbRunFitting = async () => {
+            const jobId = selectedTask.nb;
+            if (!jobId) { alert('请选择任务'); return; }
+            showLoading('nb', true, '指标解算...');
+            try {
+                const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/nurbs`, { method: 'POST' });
+                if (!res.ok) throw new Error(await res.text());
+                const nbData = await res.json();
+                switchTab('nb', 'results');
+                document.getElementById('nb-params-list').innerHTML = `
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">叶片长度</span><span class="font-mono text-white">${Number(nbData.lengthMm).toFixed(3)} mm</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">弦长</span><span class="font-mono text-white">${Number(nbData.chordMm).toFixed(3)} mm</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">扭转角</span><span class="font-mono text-white">${Number(nbData.twistDeg).toFixed(2)}°</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">最大厚度</span><span class="font-mono text-white">${Number(nbData.thickMm).toFixed(3)} mm</span></div>
+                    <div class="metric-card p-3 rounded flex justify-between"><span class="text-xs text-slate-400">评估</span><span class="font-mono text-emerald-400">${nbData.eval}</span></div>
+                `;
+                document.getElementById('nb-export-btn').disabled = false;
+                await refreshJobs();
+                await dmSyncFromServer();
+                await loadNbScene(jobId);
+            } catch (e) {
+                alert('指标解算失败：' + (e && e.message ? e.message : String(e)));
+            } finally {
+                showLoading('nb', false);
+            }
+        };
+
+        function showLoading(mod, show, text) {
+            const el = document.getElementById(`${mod}-loading-overlay`);
+            document.getElementById(`${mod}-loading-text`).textContent = text;
+            show ? el.classList.remove('hidden') : el.classList.add('hidden');
+        }
+
+        // 初始化
+        window.onload = () => {
+            initThreeJS('icp'); initThreeJS('ps'); initThreeJS('nb');
+            window.addEventListener('resize', resizeCanvases);
+            animate();
+            switchAppModule('icp');
+            const d = document.getElementById('manual-inspect-date');
+            if (d && !d.value) d.value = new Date().toISOString().slice(0, 10);
+            void refreshJobs();
+        };
+    </script>
+</body>
+</html>

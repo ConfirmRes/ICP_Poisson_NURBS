@@ -1,0 +1,14 @@
+# 核心 Web / 数据库（任意 Python 3.10+）
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+sqlalchemy==2.0.36
+pymysql==1.1.1
+cryptography>=42.0.0
+python-dotenv==1.0.1
+python-multipart==0.0.17
+numpy>=1.26.0
+scipy>=1.11.0
+
+# Open3D：请用 Anaconda Python 3.10–3.12 安装（3.14 通常无预编译包）
+#   conda install -c open3d open3d
+# 或在 3.11 下：pip install open3d

@@ -1,0 +1,22 @@
+# Anaconda 推荐环境（含 Open3D）
+# 创建：conda env create -f environment.yml
+# 激活：conda activate blade-backend
+name: blade-backend
+channels:
+  - open3d
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - open3d>=0.18
+  - pip
+  - pip:
+      - fastapi==0.115.6
+      - uvicorn[standard]==0.32.1
+      - sqlalchemy==2.0.36
+      - pymysql==1.1.1
+      - cryptography>=42.0.0
+      - python-dotenv==1.0.1
+      - python-multipart==0.0.17
+      - "numpy>=1.26.0"
+      - "scipy>=1.11.0"
